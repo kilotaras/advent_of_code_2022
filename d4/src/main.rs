@@ -27,6 +27,13 @@ fn contains(a: &ElfRange, b: &ElfRange) -> bool {
     return contains_impl(a, b) || contains_impl(b, a);
 }
 
+fn intersect(a: &ElfRange, b: &ElfRange) -> bool {
+    fn intersect_impl(a: &ElfRange, b: &ElfRange) -> bool {
+        a.start <= b.start && a.end >= b.start
+    }
+    return intersect_impl(a, b) || intersect_impl(b, a);
+}
+
 fn main() {
     // reads all lines  and parses them
     let answer = std::io::stdin()
@@ -34,7 +41,7 @@ fn main() {
         .lines()
         .map(|line| line.unwrap())
         .map(|line| parse_line(&line))
-        .filter(|(a, b)| contains(&a, &b))
+        .filter(|(a, b)| intersect(&a, &b))
         .count();
 
     println!("{}", answer);
