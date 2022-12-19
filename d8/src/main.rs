@@ -3,7 +3,7 @@ use ndarray::prelude::*;
 use ndarray::Array2;
 use ndarray::*;
 
-fn solve_one_dim(view: &ArrayBase<ViewRepr<&i32>, Dim<[usize; 1]>>) -> Vec<bool> {
+fn solve_one_dim_p1(view: &ArrayBase<ViewRepr<&i32>, Dim<[usize; 1]>>) -> Vec<bool> {
     let mut max = view[0];
     let mut answer = vec![false; view.len()];
     for idx in 0..view.len() {
@@ -16,6 +16,37 @@ fn solve_one_dim(view: &ArrayBase<ViewRepr<&i32>, Dim<[usize; 1]>>) -> Vec<bool>
     answer[0] = true;
 
     answer
+}
+
+// returns number of visible trees to the left
+fn solve_one_dim_p2(view: &ArrayBase<ViewRepr<&i32>, Dim<[usize; 1]>>) -> Vec<usize> {
+    let mut answer = vec![0; view.len()];
+    for idx in 1..view.len() {
+        let mut count = 0;
+        for jdx in (0..idx).rev() {
+            count += 1;
+            if view[jdx] >= view[idx] {
+                break;
+            }
+        }
+        answer[idx] = count;
+    }
+    answer
+}
+
+#[test]
+fn test_solve_one_dim_p2() {
+    let arr = array![1, 2, 3, 4, 5, 6, 7, 8, 9];
+    let answer = solve_one_dim_p2(&arr.view());
+    assert_eq!(answer, vec![0, 1, 2, 3, 4, 5, 6, 7, 8]);
+
+    let arr = array![9, 8, 7, 6, 5, 4, 3, 2, 1];
+    let answer = solve_one_dim_p2(&arr.view());
+    assert_eq!(answer, vec![0, 1, 1, 1, 1, 1, 1, 1, 1]);
+
+    let arr = array![1, 2, 3, 1, 2, 5, 1];
+    let answer = solve_one_dim_p2(&arr.view());
+    assert_eq!(answer, vec![0, 1, 2, 1, 2, 5, 1]);
 }
 
 fn main() {
@@ -41,44 +72,44 @@ fn main() {
         arr
     };
 
-    let mut visible = field.map(|_| false);
+    let mut visible = field.map(|_| (0, 0, 0, 0));
 
     Zip::from(field.rows())
         .and(visible.rows_mut())
         .for_each(|field_view, mut visible_view| {
-            let answer = solve_one_dim(&field_view);
+            let answer = solve_one_dim_p2(&field_view);
             for (idx, &val) in answer.iter().enumerate() {
-                visible_view[idx] |= val;
+                visible_view[idx].0 = val;
             }
 
             let field_view = field_view.slice(s![..;-1]);
             let mut visible_view = visible_view.slice_mut(s![..;-1]);
-            let answer = solve_one_dim(&field_view);
+            let answer = solve_one_dim_p2(&field_view);
             for (idx, &val) in answer.iter().enumerate() {
-                visible_view[idx] |= val;
+                visible_view[idx].1 = val;
             }
         });
 
     Zip::from(field.columns())
         .and(visible.columns_mut())
         .for_each(|field_view, mut visible_view| {
-            let answer = solve_one_dim(&field_view);
+            let answer = solve_one_dim_p2(&field_view);
             for (idx, &val) in answer.iter().enumerate() {
-                visible_view[idx] |= val;
+                visible_view[idx].2 = val;
             }
 
             let field_view = field_view.slice(s![..;-1]);
             let mut visible_view = visible_view.slice_mut(s![..;-1]);
-            let answer = solve_one_dim(&field_view);
+            let answer = solve_one_dim_p2(&field_view);
             for (idx, &val) in answer.iter().enumerate() {
-                visible_view[idx] |= val;
+                visible_view[idx].3 = val;
             }
         });
 
-    let total_visible = visible
+    let answer = visible
         .iter()
-        .filter(|&&val| val)
-        .count();
+        .map(|&(a, b, c, d)| a*b*c*d)
+        .max().unwrap();
 
-    println!("{}", total_visible);
+    println!("{}", answer);
 }
