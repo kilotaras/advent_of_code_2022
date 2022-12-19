@@ -1,4 +1,22 @@
 use std::io::BufRead;
+use ndarray::prelude::*;
+use ndarray::Array2;
+use ndarray::*;
+
+fn solve_one_dim(view: &ArrayBase<ViewRepr<&i32>, Dim<[usize; 1]>>) -> Vec<bool> {
+    let mut max = view[0];
+    let mut answer = vec![false; view.len()];
+    for idx in 0..view.len() {
+        if view[idx] > max {
+            max = view[idx];
+            answer[idx] = true;
+        }
+    }
+
+    answer[0] = true;
+
+    answer
+}
 
 fn main() {
     let string_to_vec_of_ints = |line: String| {
@@ -7,74 +25,60 @@ fn main() {
             .collect::<Vec<i32>>()
     };
 
-    let field = std::io::stdin()
-        .lock()
-        .lines()
-        .map(|line| line.unwrap())
-        .map(string_to_vec_of_ints)
-        .collect::<Vec<_>>();
-
-    let mut visible = field
-        .iter()
-        .map(|row| vec![false; row.len()])
-        .collect::<Vec<_>>();
-
-    let rows = field.len();
-    let cols = field[0].len();
-
-    for row_idx in 0..rows {
-        visible[row_idx][0] = true;
-
-        let mut max = field[row_idx][0];
-        for col_idx in 0..cols {
-            let height = field[row_idx][col_idx];
-            if height > max {
-                max = height;
-                visible[row_idx][col_idx] = true;
+    let field = {
+        let field = std::io::stdin()
+            .lock()
+            .lines()
+            .map(|line| line.unwrap())
+            .map(string_to_vec_of_ints)
+            .collect::<Vec<_>>();
+        let mut arr = Array2::zeros((field.len(), field[0].len()));
+        for (idx, mut row) in arr.rows_mut().into_iter().enumerate() {
+            for (jdx, col) in row.iter_mut().enumerate() {
+                *col = field[idx][jdx];
             }
         }
+        arr
+    };
 
-        // now the other way
-        visible[row_idx][cols - 1] = true;
-        let mut max = field[row_idx][cols - 1];
-        for col_idx in (0..cols).rev() {
-            let height = field[row_idx][col_idx];
-            if height > max {
-                max = height;
-                visible[row_idx][col_idx] = true;
+    let mut visible = field.map(|_| false);
+
+    Zip::from(field.rows())
+        .and(visible.rows_mut())
+        .for_each(|field_view, mut visible_view| {
+            let answer = solve_one_dim(&field_view);
+            for (idx, &val) in answer.iter().enumerate() {
+                visible_view[idx] |= val;
             }
-        }
-    }
 
-    // and now columns
-    for col_idx in 0..cols {
-        visible[0][col_idx] = true;
-
-        let mut max = field[0][col_idx];
-        for row_idx in 0..rows {
-            let height = field[row_idx][col_idx];
-            if height > max {
-                max = height;
-                visible[row_idx][col_idx] = true;
+            let field_view = field_view.slice(s![..;-1]);
+            let mut visible_view = visible_view.slice_mut(s![..;-1]);
+            let answer = solve_one_dim(&field_view);
+            for (idx, &val) in answer.iter().enumerate() {
+                visible_view[idx] |= val;
             }
-        }
+        });
 
-        // now the other way
-        visible[rows - 1][col_idx] = true;
-        let mut max = field[rows - 1][col_idx];
-        for row_idx in (0..rows).rev() {
-            let height = field[row_idx][col_idx];
-            if height > max {
-                max = height;
-                visible[row_idx][col_idx] = true;
+    Zip::from(field.columns())
+        .and(visible.columns_mut())
+        .for_each(|field_view, mut visible_view| {
+            let answer = solve_one_dim(&field_view);
+            for (idx, &val) in answer.iter().enumerate() {
+                visible_view[idx] |= val;
             }
-        }
-    }
+
+            let field_view = field_view.slice(s![..;-1]);
+            let mut visible_view = visible_view.slice_mut(s![..;-1]);
+            let answer = solve_one_dim(&field_view);
+            for (idx, &val) in answer.iter().enumerate() {
+                visible_view[idx] |= val;
+            }
+        });
 
     let total_visible = visible
         .iter()
-        .map(|row| row.iter().filter(|&&x| x).count())
-        .sum::<usize>();
+        .filter(|&&val| val)
+        .count();
 
     println!("{}", total_visible);
 }
