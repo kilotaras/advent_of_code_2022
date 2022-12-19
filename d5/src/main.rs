@@ -115,10 +115,8 @@ fn main() {
         let command = parse_command_line(command_line);
         let (from, to) = get_two_elements_mut(&mut crates, command.from-1, command.to-1);
 
-        for _ in 0..command.count {
-            let c = from.pop().unwrap();
-            to.push(c);
-        }
+        let mut moved = from.split_off(from.len() - command.count);
+        to.append(&mut moved);
     }
 
     let ans: String = crates.iter()
