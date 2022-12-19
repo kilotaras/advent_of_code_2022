@@ -139,6 +139,7 @@ enum NodeType {
     File,
 }
 
+#[derive(Debug, Eq, PartialEq)]
 struct NodeData {
     size: Cell<Option<usize>>,
     node_type: NodeType,
@@ -209,11 +210,23 @@ fn main() {
 
             node.data().size.set(Some(size));
         }
-        let size = node.data().size.get().unwrap();
-        if size <= 100000 && node.data().node_type == NodeType::Directory {
-            total += size;
-        }
     }
 
-    println!("{}", total);
+    let size_total = 70000000;
+    let size_needed = 30000000;
+    let size_to_use = size_total - size_needed;
+    let size_present = tree.get(&root).unwrap().data().size.get().unwrap();
+
+    let size_to_remove = size_present - size_to_use;
+
+
+    let answer = tree.traverse_post_order(&root)
+        .unwrap()
+        .filter(|node| node.data().node_type == NodeType::Directory)
+        .map(|node| node.data().size.get().unwrap())
+        .filter(|size| *size >= size_to_remove)
+        .min()
+        .unwrap();
+
+    println!("{}", answer);
 }
