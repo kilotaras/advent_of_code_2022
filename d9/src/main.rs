@@ -37,11 +37,46 @@ fn step_one(dx: i32, dy: i32) -> (i32, i32) {
     (dx, dy)
 }
 
+fn advance_next(prev: Point, next: Point) -> Point {
+    let (dx, dy) = step_one(prev.x - next.x, prev.y - next.y);
+    Point {
+        x: next.x + dx,
+        y: next.y + dy,
+    }
+}
+
+
+fn dump(rope: &[Point]) {
+    const size: i32 = 5;
+    const min_x: i32 = -size;
+    const max_x: i32 = size;
+    const min_y: i32 = -size;
+    const max_y: i32 = size;
+
+    for x in min_x..=max_x {
+        for y in min_y..=max_y {
+            let mut found = false;
+            for (i, point) in rope.iter().enumerate() {
+                if point.x == x && point.y == y {
+                    print!("{}", i);
+                    found = true;
+                    break;
+                }
+            }
+            if !found {
+                print!(".");
+            }
+        }
+        println!();
+    }
+    println!();
+}
+
 fn main() {
-    let mut head = Point { x: 0, y: 0 };
-    let mut tail = Point { x: 0, y: 0 };
+    let mut rope = vec![Point { x: 0, y: 0 }; 10];
     let mut visited = HashSet::new();
-    visited.insert(tail);
+    visited.insert(rope.last().unwrap().clone());
+
     for line in std::io::stdin().lock().lines() {
         let line = line.unwrap();
 
@@ -57,14 +92,15 @@ fn main() {
             _ => panic!("Unknown direction {}", direction),
         };
 
-        for i in 0..distance {
-            head.x += dx;
-            head.y += dy;
+        for _ in 0..distance {
+            rope[0].x += dx;
+            rope[0].y += dy;
 
-            let (dx, dy) = step_one(head.x - tail.x, head.y - tail.y);
-            tail.x += dx;
-            tail.y += dy;
-            visited.insert(tail);
+
+            for i in 1..rope.len() {
+                rope[i] = advance_next(rope[i - 1], rope[i]);
+            }
+            visited.insert(rope.last().unwrap().clone());
         }
     }
 
