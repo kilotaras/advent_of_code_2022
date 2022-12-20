@@ -132,38 +132,31 @@ fn find_positions_fast(measurements: &[Measurement], row: i32) -> Vec<Range<i32>
         }
     }
 
-    let mut beacons = Vec::new();
-
-    for m in measurements.iter() {
-        if m.beacon.row == row {
-            beacons.push(m.beacon.col);
-        }
-    }
-
-    beacons.sort();
-
-    let mut valid_ranges = Vec::new();
-
-    for range in merged {
-        let mut current_range = range.clone();
-        for beacon in beacons.iter() {
-            if current_range.contains(&beacon) {
-                let to_add = current_range.start..*beacon;
-                current_range = (*beacon + 1)..current_range.end;
-
-                valid_ranges.push(to_add);
-            }
-        }
-        valid_ranges.push(current_range);
-    }
-
-    valid_ranges
+    merged.sort_by_key(|r| r.start);
+    merged
 }
 
 #[allow(dead_code)]
 fn find_answer_fast(measurements: &[Measurement], row: i32) -> i32 {
     let ranges = find_positions_fast(measurements, row);
-    ranges.iter().map(|r| r.end - r.start).sum()
+    let mut beacons = HashSet::new();
+
+    for m in measurements.iter() {
+        if m.beacon.row == row {
+            beacons.insert(m.beacon.col);
+        }
+    }
+    let mut answer = ranges.iter().map(|r| r.end - r.start).sum();
+
+    for b in beacons.iter() {
+        for r in ranges.iter() {
+            if r.contains(b) {
+                answer -= 1;
+                break;
+            }
+        }
+    }
+    answer
 }
 #[cfg(test)]
 mod sample_tests {
@@ -234,4 +227,24 @@ fn main() {
         .lines()
         .map(|line| parse_message(&line.unwrap()))
         .collect();
+
+    let max_position = 4000000;
+
+    // let answer = find_answer_fast(&measurements, 2000000);
+    // println!("{}", answer);
+
+    for row in 0..(max_position+1) {
+        let ranges = find_positions_fast(&measurements, row);
+        let mut possible = 0;
+        for range in ranges.iter() {
+            if range.contains(&possible) {
+                assert!(possible == 0);
+                possible = range.end;
+            }
+        }
+        if possible <= max_position {
+            println!("{}: {}", row, possible);
+            println!("{}", (possible as i64)*4000000 + (row as i64));
+        }
+    }
 }
