@@ -24,10 +24,13 @@ fn main() {
         .map(|x| x.unwrap())
         .map(|x| parse_line(&x))
         .collect();
-    let lines = chunks.iter().flat_map(|x| x.iter()).map(|x| x.x).max().unwrap() as usize + 5;
-    let rows = chunks.iter().flat_map(|x| x.iter()).map(|x| x.y).max().unwrap() as usize + 5;
+    let rows = chunks.iter().flat_map(|x| x.iter()).map(|x| x.x).max().unwrap() as usize + 3;
+    let cols = 2*chunks.iter().flat_map(|x| x.iter()).map(|x| x.y).max().unwrap() as usize;
 
-    let mut field = vec![vec!['.'; rows as usize]; lines as usize];
+    let mut field = vec![vec!['.'; cols]; rows];
+    for c in field.last_mut().unwrap().iter_mut() {
+        *c = '#';
+    }
 
     for points in chunks {
         points.iter()
@@ -48,13 +51,9 @@ fn main() {
 
     let mut cnt = 0;
 
-    loop {
+    while field[0][500] == '.' {
         let (mut px, mut py) = (0, 500);
         loop {
-            if px == (lines - 1) {
-                break;
-            }
-
             let attempts: [i32; 3] = [0, -1, 1];
 
             let mut found = false;
@@ -74,11 +73,6 @@ fn main() {
             }
         }
         field[px][py as usize] = 'o';
-
-        if px == (lines - 1) {
-            break;
-        }
-
         cnt += 1;
     }
 
