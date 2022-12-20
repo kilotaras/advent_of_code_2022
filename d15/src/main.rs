@@ -1,10 +1,12 @@
 use std::cmp::{max, min};
+use std::collections::HashSet;
 use std::io::BufRead;
+use std::ops::Range;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct Point {
-    x: i32,
-    y: i32,
+    col: i32,
+    row: i32,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -17,16 +19,16 @@ fn parse_message(s: &str) -> Measurement {
     let mut iter = s.split(|c| " =,:".contains(c));
     let sensor = {
         // Sensor at x
-        let x = iter.nth(3).unwrap().parse().unwrap();
+        let col = iter.nth(3).unwrap().parse().unwrap();
         // y
-        let y = iter.nth(2).unwrap().parse().unwrap();
-        Point { x, y }
+        let row = iter.nth(2).unwrap().parse().unwrap();
+        Point { col, row }
     };
 
     let beacon = {
-        let x = iter.nth(6).unwrap().parse().unwrap();
-        let y = iter.nth(2).unwrap().parse().unwrap();
-        Point { x, y }
+        let col = iter.nth(6).unwrap().parse().unwrap();
+        let row = iter.nth(2).unwrap().parse().unwrap();
+        Point { col, row }
     };
 
     Measurement { sensor, beacon }
@@ -43,50 +45,167 @@ mod tests {
         assert_eq!(
             m,
             Measurement {
-                sensor: Point { x: 2, y: 18 },
-                beacon: Point { x: -2, y: 15 },
+                sensor: Point { col: 2, row: 18 },
+                beacon: Point { col: -2, row: 15 },
             }
         );
     }
 }
 
+#[allow(dead_code)]
 fn find_answer_slow(measurements: &[Measurement], row: i32) -> i32 {
-    let min_y = measurements
+    let min_col = measurements
         .iter()
-        .map(|m| min(m.sensor.y, m.beacon.y))
+        .map(|m| min(m.sensor.col, m.beacon.col))
         .min()
         .unwrap();
 
-    let max_y = measurements
+    let max_col = measurements
         .iter()
-        .map(|m| max(m.sensor.y, m.beacon.y))
+        .map(|m| max(m.sensor.col, m.beacon.col))
         .max()
         .unwrap();
 
+    let d = max_col - min_col + 1;
 
-    let d = max_y - min_y + 1;
-
-    let left_edge = min_y - 3 * d - 2 * row;
-    let right_edge = max_y + 3 * d + 2 * row;
+    let d = 3 * d + row.abs()*2 + 100;
+    let left_edge = min_col - d;
+    let right_edge = max_col + d;
 
     let blocked = |col: i32| {
         let blocked = measurements.iter().any(|m| {
-            let distance_to_candidate = (m.sensor.x - col).abs() + (m.sensor.y - row).abs();
+            let distance_to_candidate = (m.sensor.col - col).abs() + (m.sensor.row - row).abs();
             let distance_to_beacon =
-                (m.sensor.x - m.beacon.x).abs() + (m.sensor.y - m.beacon.y).abs();
+                (m.sensor.col - m.beacon.col).abs() + (m.sensor.row - m.beacon.row).abs();
 
             distance_to_candidate <= distance_to_beacon
         });
 
         let has_beacon = measurements
             .iter()
-            .any(|m| m.beacon.x == col && m.beacon.y == row);
+            .any(|m| m.beacon.col == col && m.beacon.row == row);
 
-        return blocked && !has_beacon;
+        blocked && !has_beacon
     };
 
     (left_edge..right_edge).filter(|col| blocked(*col)).count() as i32
 }
+
+
+#[allow(dead_code)]
+fn find_answer_fast(measurements: &[Measurement], row: i32) -> i32 {
+    let mut ranges = Vec::new();
+
+    for m in measurements.iter() {
+        let distance_to_beacon = (m.sensor.col - m.beacon.col).abs() + (m.sensor.row - m.beacon.row).abs();
+
+        let distance_to_row = (m.sensor.row - row).abs();
+
+        if distance_to_row <= distance_to_beacon {
+            let dleft = distance_to_beacon - distance_to_row;
+            let left = m.sensor.col - dleft;
+            let right = m.sensor.col + dleft;
+            ranges.push(left..(right + 1));
+        }
+    }
+
+    ranges.sort_by_key(|r| (r.start, r.end));
+
+    if ranges.is_empty() {
+        return 0;
+    }
+
+    let mut merged: Vec<Range<i32>> = vec![ranges[0].clone()];
+
+    for r in ranges.iter().skip(1) {
+        let mut last = merged.last_mut().unwrap();
+        if r.start <= last.end {
+            last.end = max(r.end, last.end);
+        } else {
+            merged.push(r.clone());
+        }
+    }
+
+    let mut hs = HashSet::new();
+
+    for m in measurements.iter() {
+        if m.beacon.row == row {
+            hs.insert(m.beacon.col);
+        }
+    }
+
+    let mut answer: i32 = merged.iter().map(|r| r.end - r.start).sum();
+
+    for y in hs {
+        let is_in_one_of_ranges = merged.iter().any(|r| r.contains(&y));
+        if is_in_one_of_ranges {
+            answer -= 1;
+        }
+    }
+
+    answer
+}
+
+#[cfg(test)]
+mod sample_tests {
+    use super::*;
+
+    #[test]
+    fn test_slow() {
+        let small: Vec<Measurement> = include_str!("../sample.txt")
+            .lines()
+            .map(|line| parse_message(line))
+            .collect();
+
+        assert_eq!(find_answer_slow(&small, 10), 26);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_slow_large() {
+        let large: Vec<Measurement> = include_str!("../input")
+            .lines()
+            .map(|line| parse_message(line))
+            .collect();
+
+        assert_eq!(find_answer_slow(&large, 2000000), 4582667);
+    }
+
+
+    #[test]
+    fn test_fast_small() {
+        let small: Vec<Measurement> = include_str!("../sample.txt")
+            .lines()
+            .map(|line| parse_message(line))
+            .collect();
+
+        assert_eq!(find_answer_fast(&small, 10), 26);
+    }
+
+    #[test]
+    fn test_fast_small_compare_with_slow() {
+        let small: Vec<Measurement> = include_str!("../sample.txt")
+            .lines()
+            .map(|line| parse_message(line))
+            .collect();
+
+        for row in 0..20 {
+            assert_eq!(find_answer_fast(&small, row), find_answer_slow(&small, row), "Differs at row {}", row);
+        }
+    }
+
+
+#[test]
+    fn test_fast_large() {
+        let large: Vec<Measurement> = include_str!("../input")
+            .lines()
+            .map(|line| parse_message(line))
+            .collect();
+
+        assert_eq!(find_answer_fast(&large, 2000000), 4582667);
+    }
+}
+
 
 fn main() {
     let measurements: Vec<_> = std::io::stdin()
@@ -94,7 +213,4 @@ fn main() {
         .lines()
         .map(|line| parse_message(&line.unwrap()))
         .collect();
-
-    let answer = find_answer_slow(&measurements, 2000000);
-    println!("{}", answer);
 }
