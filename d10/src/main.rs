@@ -59,13 +59,27 @@ fn main() {
         }
     }
 
-    cycles_to_state.push(state);
-
-
     for (i, state) in cycles_to_state.iter().enumerate().skip(19).step_by(40) {
         println!("{}: {}", i + 1, state);
         total += (i as i32 + 1) * state
     }
 
+    let mut output = String::new();
+
+    for (i, state) in cycles_to_state.iter().enumerate() {
+        let row_position = (i % 40) as i32;
+
+        if (row_position - state).abs() <= 1 {
+            output.push('#');
+        } else {
+            output.push('.');
+        }
+
+        if row_position == 39 {
+            output.push('\n')
+        }
+    }
+
     println!("{}", total);
+    println!("{}", output);
 }
