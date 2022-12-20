@@ -34,16 +34,22 @@ fn main() {
         .map(|x| x.iter().map(|c| char_to_height(*c)).collect())
         .collect();
 
-    let (x, y) = find_position(&field_lines, 'S');
     let (ex, ey) = find_position(&field_lines, 'E');
 
     let mut distance = vec![vec![-1; field[0].len()]; field.len()];
-    let mut queue = VecDeque::from([(x, y )]);
+    let mut queue = VecDeque::new();
 
-    distance[x][y] = 0;
-
-    let row_range = 0..field.len();;
+    let row_range = 0..field.len();
     let col_range = 0..field[0].len();
+
+    for row in row_range.clone() {
+        for col in col_range.clone() {
+            if field[row][col] == 0 {
+                distance[row][col] = 0;
+                queue.push_back((row, col));
+            }
+        }
+    }
 
     // Implement BFS here
     while let Some((row, column)) = queue.pop_front() {
