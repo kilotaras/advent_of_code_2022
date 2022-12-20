@@ -3,13 +3,13 @@ use std::io::BufRead;
 struct Operation {
     left: Box<dyn Fn(i32) -> i32>,
     right: Box<dyn Fn(i32) -> i32>,
-    op: Box<dyn Fn(i32, i32) -> i32>,
+    op: Box<dyn Fn(i64, i64) -> i64>,
 }
 
 impl Operation {
-    fn apply(&self, cur: i32) -> i32 {
-        let left = (self.left)(cur);
-        let right = (self.right)(cur);
+    fn apply(&self, cur: i32) -> i64 {
+        let left = (self.left)(cur) as i64;
+        let right = (self.right)(cur) as i64;
         (self.op)(left, right)
     }
 }
@@ -18,10 +18,15 @@ struct Monkey {
     items: Vec<i32>,
     operation: Operation,
     picker: Box<dyn Fn(i32) -> usize>,
+    divisor: i32,
     inspected: i32,
 }
 
-fn parse_picker(test_line: &str, true_line: &str, false_line: &str) -> Box<dyn Fn(i32) -> usize> {
+fn parse_picker(
+    test_line: &str,
+    true_line: &str,
+    false_line: &str,
+) -> (Box<dyn Fn(i32) -> usize>, i32) {
     fn pick_last_number(s: &str) -> i32 {
         let mut parts = s.split_whitespace();
         parts.next_back().unwrap().parse().unwrap()
@@ -30,13 +35,16 @@ fn parse_picker(test_line: &str, true_line: &str, false_line: &str) -> Box<dyn F
     let if_true = pick_last_number(true_line) as usize;
     let if_false = pick_last_number(false_line) as usize;
 
-    Box::new(move |x| {
-        if x % modulo == 0 {
-            if_true as usize
-        } else {
-            if_false as usize
-        }
-    })
+    (
+        Box::new(move |x| {
+            if x % modulo == 0 {
+                if_true as usize
+            } else {
+                if_false as usize
+            }
+        }),
+        modulo,
+    )
 }
 
 fn parse_items(s: &str) -> Vec<i32> {
@@ -119,11 +127,12 @@ mod tests {
 
     #[test]
     fn test_parse_picker() {
-        let picker = parse_picker(
+        let (picker, divisor) = parse_picker(
             "Test: divisible by 13",
             "If true: throw to monkey 5",
             "If false: throw to monkey 7",
         );
+        assert_eq!(divisor, 13);
         assert_eq!(picker(3), 7);
         assert_eq!(picker(8), 7);
         assert_eq!(picker(26), 5);
@@ -139,12 +148,13 @@ mod tests {
 fn parse_monkey(monkey_input: &[String]) -> Monkey {
     let items = parse_items(&monkey_input[1][18..]);
     let operation: Operation = monkey_input[2][13..].parse().unwrap();
-    let picker = parse_picker(&monkey_input[3], &monkey_input[4], &monkey_input[5]);
+    let (picker, divisor) = parse_picker(&monkey_input[3], &monkey_input[4], &monkey_input[5]);
     Monkey {
         items,
         operation,
         picker,
-        inspected: 0
+        divisor,
+        inspected: 0,
     }
 }
 
@@ -166,16 +176,19 @@ fn main() {
         .map(parse_monkey)
         .collect::<Vec<_>>();
 
+    let modulo = monkeys.iter().map(|m| m.divisor).fold(1, |a, b| a * b) as i64;
+    dbg!(modulo);
 
-    let rounds = 20;
+    let rounds = 10000;
     for _ in 0..rounds {
         for cur_monkey_index in 0..monkeys.len() {
             let cur_monkey = &mut monkeys[cur_monkey_index];
 
-            let new_positions = cur_monkey.items
+            let new_positions = cur_monkey
+                .items
                 .iter()
                 .map(|x| cur_monkey.operation.apply(*x))
-                .map(|x| x / 3)
+                .map(|x| (x % modulo) as i32)
                 .map(|x| ((cur_monkey.picker)(x), x))
                 .collect::<Vec<_>>();
 
@@ -188,9 +201,7 @@ fn main() {
         }
     }
 
-    let mut inspected = monkeys.iter()
-        .map(|x| x.inspected)
-        .collect::<Vec<_>>();
+    let mut inspected = monkeys.iter().map(|x| x.inspected as i64).collect::<Vec<_>>();
 
     inspected.sort();
     inspected.reverse();
