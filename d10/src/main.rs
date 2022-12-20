@@ -44,33 +44,27 @@ mod tests {
 }
 
 fn main() {
-    let mut cycles: i32 = 1;
     let mut state: i32 = 1;
-
-    let is_interesting = |cycles: i32| {
-        (cycles - 20)%40 == 0
-    };
-
     let mut total = 0;
+
+    let mut cycles_to_state = Vec::new();
 
     for line in std::io::stdin().lock().lines() {
         let line = line.unwrap();
         let operation = line.parse::<Operation>().unwrap();
-        let prev_state = state;
-        (cycles, state) = match operation {
-            Operation::NoOp => (cycles + 1, state),
-            Operation::AddX(value) => (cycles + 2, state + value),
-        };
-
-        if is_interesting(cycles) {
-            total += cycles * state;
+        cycles_to_state.push(state);
+        if let Operation::AddX(value) = operation {
+            cycles_to_state.push(state);
+            state += value;
         }
+    }
 
-        if let Operation::AddX(_) = operation {
-            if is_interesting(cycles - 1) {
-                total += (cycles - 1) * prev_state;
-            }
-        }
+    cycles_to_state.push(state);
+
+
+    for (i, state) in cycles_to_state.iter().enumerate().skip(19).step_by(40) {
+        println!("{}: {}", i + 1, state);
+        total += (i as i32 + 1) * state
     }
 
     println!("{}", total);
