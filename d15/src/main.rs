@@ -52,8 +52,7 @@ mod tests {
     }
 }
 
-#[allow(dead_code)]
-fn find_answer_slow(measurements: &[Measurement], row: i32) -> i32 {
+fn find_position_slow(measurements: &[Measurement], row: i32) -> Vec<i32> {
     let min_col = measurements
         .iter()
         .map(|m| min(m.sensor.col, m.beacon.col))
@@ -68,7 +67,7 @@ fn find_answer_slow(measurements: &[Measurement], row: i32) -> i32 {
 
     let d = max_col - min_col + 1;
 
-    let d = 3 * d + row.abs()*2 + 100;
+    let d = 3 * d + row.abs() * 2 + 100;
     let left_edge = min_col - d;
     let right_edge = max_col + d;
 
@@ -88,16 +87,23 @@ fn find_answer_slow(measurements: &[Measurement], row: i32) -> i32 {
         blocked && !has_beacon
     };
 
-    (left_edge..right_edge).filter(|col| blocked(*col)).count() as i32
+    (left_edge..right_edge)
+        .filter(|col| blocked(*col))
+        .collect()
 }
 
-
 #[allow(dead_code)]
-fn find_answer_fast(measurements: &[Measurement], row: i32) -> i32 {
+fn find_answer_slow(measurements: &[Measurement], row: i32) -> i32 {
+    let position = find_position_slow(measurements, row);
+    position.len() as i32
+}
+
+fn find_positions_fast(measurements: &[Measurement], row: i32) -> Vec<Range<i32>> {
     let mut ranges = Vec::new();
 
     for m in measurements.iter() {
-        let distance_to_beacon = (m.sensor.col - m.beacon.col).abs() + (m.sensor.row - m.beacon.row).abs();
+        let distance_to_beacon =
+            (m.sensor.col - m.beacon.col).abs() + (m.sensor.row - m.beacon.row).abs();
 
         let distance_to_row = (m.sensor.row - row).abs();
 
@@ -112,7 +118,7 @@ fn find_answer_fast(measurements: &[Measurement], row: i32) -> i32 {
     ranges.sort_by_key(|r| (r.start, r.end));
 
     if ranges.is_empty() {
-        return 0;
+        return vec![];
     }
 
     let mut merged: Vec<Range<i32>> = vec![ranges[0].clone()];
@@ -126,26 +132,39 @@ fn find_answer_fast(measurements: &[Measurement], row: i32) -> i32 {
         }
     }
 
-    let mut hs = HashSet::new();
+    let mut beacons = Vec::new();
 
     for m in measurements.iter() {
         if m.beacon.row == row {
-            hs.insert(m.beacon.col);
+            beacons.push(m.beacon.col);
         }
     }
 
-    let mut answer: i32 = merged.iter().map(|r| r.end - r.start).sum();
+    beacons.sort();
 
-    for y in hs {
-        let is_in_one_of_ranges = merged.iter().any(|r| r.contains(&y));
-        if is_in_one_of_ranges {
-            answer -= 1;
+    let mut valid_ranges = Vec::new();
+
+    for range in merged {
+        let mut current_range = range.clone();
+        for beacon in beacons.iter() {
+            if current_range.contains(&beacon) {
+                let to_add = current_range.start..*beacon;
+                current_range = (*beacon + 1)..current_range.end;
+
+                valid_ranges.push(to_add);
+            }
         }
+        valid_ranges.push(current_range);
     }
 
-    answer
+    valid_ranges
 }
 
+#[allow(dead_code)]
+fn find_answer_fast(measurements: &[Measurement], row: i32) -> i32 {
+    let ranges = find_positions_fast(measurements, row);
+    ranges.iter().map(|r| r.end - r.start).sum()
+}
 #[cfg(test)]
 mod sample_tests {
     use super::*;
@@ -171,7 +190,6 @@ mod sample_tests {
         assert_eq!(find_answer_slow(&large, 2000000), 4582667);
     }
 
-
     #[test]
     fn test_fast_small() {
         let small: Vec<Measurement> = include_str!("../sample.txt")
@@ -190,12 +208,16 @@ mod sample_tests {
             .collect();
 
         for row in 0..20 {
-            assert_eq!(find_answer_fast(&small, row), find_answer_slow(&small, row), "Differs at row {}", row);
+            assert_eq!(
+                find_answer_fast(&small, row),
+                find_answer_slow(&small, row),
+                "Differs at row {}",
+                row
+            );
         }
     }
 
-
-#[test]
+    #[test]
     fn test_fast_large() {
         let large: Vec<Measurement> = include_str!("../input")
             .lines()
@@ -205,7 +227,6 @@ mod sample_tests {
         assert_eq!(find_answer_fast(&large, 2000000), 4582667);
     }
 }
-
 
 fn main() {
     let measurements: Vec<_> = std::io::stdin()
