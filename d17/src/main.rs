@@ -195,16 +195,23 @@ fn main() {
         .filter(|c| *c == '>' || *c == '<')
         .collect::<Vec<_>>();
 
-    let mut air_iter = air.iter().cycle().map(|c| match c {
-        '>' => 1,
-        '<' => -1,
-        _ => panic!("Invalid air {:?}", c),
-    });
+    let mut air_index = 0;
+    let mut figure_index = 0;
 
-    let mut figure_iter = figures.iter().cycle();
+    let lcm = air.len() * figures.len();
+    let max_v = lcm * 1000;
 
-    for num in 0..2022 {
-        let figure = figure_iter.next().unwrap();
+    let mut state = Vec::new();
+    for num in 0..max_v {
+        if num % 100000 == 0 {
+            println!("{:7}/{}", num, max_v);
+        }
+        let start_fig = figure_index;
+        let start_air = air_index;
+        let start_top = top_row;
+
+        let figure = &figures[figure_index];
+        figure_index = (figure_index + 1) % figures.len();
         let mut rock = Rock {
             figure: figure.clone(),
             position: Position {
@@ -217,7 +224,9 @@ fn main() {
         // dump(&fields, &rock);
 
         loop {
-            let dcol = air_iter.next().unwrap();
+            let dcol = if air[air_index] == '>' { 1 } else { -1 };
+            air_index = (air_index + 1) % air.len();
+
             let new_rock = rock.advance(0, dcol);
 
             // println!("{}", if dcol > 0 { '>' } else { '<' });
@@ -246,8 +255,49 @@ fn main() {
             fields[p.row as usize][p.col as usize] = true;
         }
 
-        // println!("S");
-        // dump_field(&fields);
+        let top_advance = top_row - start_top;
+        let top_distance = top_row - rock.top().row;
+
+        state.push((start_fig, start_air, top_advance, top_distance));
+    }
+
+    println!("{}", top_row);
+
+    let mut distance = 0;
+
+    let cycle_start = 3 * lcm;
+    for cycle_length in 1.. {
+        let cycle_length = cycle_length * lcm;
+
+        let bad = (cycle_start..(cycle_start + cycle_length))
+            .any(|p| state[p] != state[p + cycle_length]);
+
+        if !bad {
+            distance = cycle_length;
+            break;
+        }
+    }
+
+    let mut top_row = 0;
+    for (_, _, top_advance, _) in &state[0..cycle_start] {
+        top_row += (*top_advance) as i64;
+    }
+
+    let mut cycle_increase = 0;
+    for (_, _, top_advance, _) in &state[cycle_start..(cycle_start + distance)] {
+        cycle_increase += (*top_advance) as i64;
+    }
+
+    let target_row: i64 = 1000000000000;
+    let target_row = target_row - cycle_start as i64;
+
+    let cycles = target_row / distance as i64;
+    let rest = target_row % distance as i64;
+
+    top_row += cycles * cycle_increase;
+
+    for (_, _, top_advance, _) in &state[cycle_start..(cycle_start + rest as usize)] {
+        top_row += (*top_advance) as i64;
     }
 
     println!("{}", top_row);
