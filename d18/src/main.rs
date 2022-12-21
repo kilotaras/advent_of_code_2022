@@ -1,5 +1,5 @@
 use std::io::BufRead;
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 struct Cube {
@@ -54,6 +54,51 @@ fn main() {
         .filter(|cube| !cubes_set.contains(cube))
         .count();
 
+    println!("P1: {}", answer);
 
-    println!("{}", answer);
+    let min_x = cubes.iter().map(|c| c.x).min().unwrap() - 1;
+    let max_x = cubes.iter().map(|c| c.x).max().unwrap() + 3;
+
+    let min_y = cubes.iter().map(|c| c.y).min().unwrap() -1;
+    let max_y = cubes.iter().map(|c| c.y).max().unwrap() + 3;
+
+    let min_z = cubes.iter().map(|c| c.z).min().unwrap() - 1;
+    let max_z = cubes.iter().map(|c| c.z).max().unwrap() + 3;
+
+    let mut visited = HashSet::new();
+
+    let x_range = min_x..max_x;
+    let y_range = min_y..max_y;
+    let z_range = min_z..max_z;
+
+    let mut queue: VecDeque<Cube> = VecDeque::new();
+    queue.push_back(Cube { x: min_x, y: min_y, z: min_z });
+
+    while !queue.is_empty() {
+        let front = queue.pop_front().unwrap();
+
+        if !x_range.contains(&front.x) || !y_range.contains(&front.y) || !z_range.contains(&front.z) {
+            continue;
+        }
+
+        for neighbor in front.neighbors() {
+            if visited.contains(&neighbor) {
+                continue;
+            }
+            if cubes_set.contains(&neighbor) {
+                continue;
+            }
+            visited.insert(neighbor.clone());
+            queue.push_back(neighbor);
+        }
+    }
+
+    let answer = cubes
+        .iter()
+        .flat_map(|cube| cube.neighbors())
+        .filter(|cube| visited.contains(cube))
+        .count();
+
+    println!("P2: {}", answer);
+
 }
