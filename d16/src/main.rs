@@ -1,74 +1,37 @@
-use petgraph::prelude::*;
 use std::collections::HashMap;
 use std::io::{self, Read};
 
-use petgraph::dot::{Config, Dot};
-
-#[derive(Clone, Eq, PartialEq, Hash, Copy, PartialOrd, Ord)]
-struct NodeType {
-    name: [char; 2],
-}
-
-impl std::fmt::Display for NodeType {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}{}", self.name[0], self.name[1])
-    }
-}
-
-impl std::fmt::Debug for NodeType {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "'{}{}'", self.name[0], self.name[1])
-    }
-}
-
-// implements parse for NodeType
-impl std::str::FromStr for NodeType {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut chars = s.chars();
-        let name = [chars.next().unwrap(), chars.next().unwrap()];
-        Ok(NodeType { name })
-    }
-}
-
 #[derive(Debug)]
-struct VertexInfo {
-    name: NodeType,
+struct VertexInfoStr {
+    name: String,
     flow: i32,
-    edges_to: Vec<NodeType>,
+    edges_to: Vec<String>,
 }
 
-fn parse_info_line(s: &str) -> VertexInfo {
+fn parse_info_line(s: &str) -> VertexInfoStr {
     let mut lines = s.split(|c| " =;,".contains(c));
-    let name = lines.nth(1).unwrap().parse().unwrap();
+    let name = lines.nth(1).unwrap().to_string();
     let flow = lines.nth(3).unwrap().parse().unwrap();
     let edges_to = lines
         .skip(5)
         .filter(|s| s.len() > 0)
-        .map(|s| s.parse().unwrap())
+        .map(|s| s.to_string())
         .collect();
-    VertexInfo {
+    VertexInfoStr {
         name,
         flow,
         edges_to,
     }
 }
 
-fn parse_info_lines(input: &str) -> Vec<VertexInfo> {
+fn parse_info_lines(input: &str) -> Vec<VertexInfoStr> {
     input.lines().map(parse_info_line).collect()
 }
 
-// Floyd-Warshall implementation is bugged on undirected graphs, so we're using directed graphs
-// See: https://github.com/petgraph/petgraph/pull/487
-type Graph = DiGraphMap<NodeType, ()>;
-
-fn make_graph(info: &[VertexInfo]) -> Graph {
-    let edges = info
-        .iter()
-        .flat_map(|v| v.edges_to.iter().map(|e| (v.name.clone(), e.clone())));
-
-    Graph::from_edges(edges)
+struct VertexInfoIdx {
+    name: usize,
+    flow: i32,
+    edges_to: Vec<usize>,
 }
 
 fn main() {
@@ -83,73 +46,84 @@ fn main() {
 
     let info = parse_info_lines(&input);
 
-    let flows: HashMap<NodeType, i32> = info.iter().map(|v| (v.name, v.flow)).collect();
-
-    let graph = make_graph(&info);
-
-    let start_node = NodeType { name: ['A', 'A'] };
-    let important_nodes: Vec<_> = flows
+    let name_to_index: HashMap<String, usize> = info
         .iter()
-        .filter(|&(&name, &flow)| flow != 0 || name == start_node)
-        .map(|(name, _)| name.clone())
-        .collect::<Vec<_>>();
+        .enumerate()
+        .map(|(i, v)| (v.name.clone(), i))
+        .collect();
 
-    let get_position = |node: &NodeType| {
-        important_nodes.iter().position(|n| *n == *node)
+    let vertices = {
+        let mut vertices = info
+            .iter()
+            .map(|v| VertexInfoIdx {
+                name: name_to_index[&v.name],
+                flow: v.flow,
+                edges_to: v.edges_to.iter().map(|s| name_to_index[s]).collect(),
+            })
+            .collect::<Vec<_>>();
+        vertices.sort_by_key(|v| v.name);
+        vertices
     };
-    let start_node = get_position(&start_node).unwrap();
-    // runs a Floyd-Warshall algorithm to find the shortest path between all pairs of nodes
-    let shortest_paths = petgraph::algo::floyd_warshall(&graph, |_| 1).unwrap();
 
-    let shortest_paths = {
-        let mut map = HashMap::new();
-        for ((left, right), dist) in shortest_paths.iter() {
-            let left = get_position(left);
-            let right = get_position(right);
-            if left.is_some() && right.is_some() {
-                let left = left.unwrap();
-                let right = right.unwrap();
-                map.insert((left, right), *dist);
-            }
+    for (i, v) in vertices.iter().enumerate() {
+        assert_eq!(i, v.name);
+    }
+
+    let interesting_nodes = vertices.iter().filter(|v| v.flow > 0).collect::<Vec<_>>();
+
+    let node_to_mask_position = {
+        let mut result = vec![100; vertices.len()];
+        for (i, node) in interesting_nodes.iter().enumerate() {
+            result[node.name] = i;
         }
-        map
+        result
     };
+
+    let mask_len = interesting_nodes.len();
+    let max_mask = 1 << mask_len;
+
+    let start_node = name_to_index["AA"];
+    let node_count = vertices.len();
 
     let time = 30;
-    let node_count = important_nodes.len();
-    let max_mask = (1 << node_count) - 1;
 
     // time, node, mask
     let mut dp = vec![vec![vec![-5000000; max_mask + 1]; node_count]; time];
 
     dp[0][start_node][0] = 0;
 
-    for ct in 0..time {
+    for ct in 0..(time - 1) {
         for cnode in 0..node_count {
             for mask in 0..max_mask {
                 if dp[ct][cnode][mask] < 0 {
                     continue;
                 }
 
-                if mask & (1 << cnode) == 0 {
-                    // we can turn on the node
-                    let new_mask = mask | (1 << cnode);
-                    let new_time = ct + 1;
-                    let time_left = (time - new_time) as i32;
-                    let new_flow = dp[ct][cnode][mask] + flows[&important_nodes[cnode]] * time_left;
-                    if new_time < time && new_flow > dp[new_time][cnode][new_mask] {
-                        dp[new_time][cnode][new_mask] = new_flow;
+                if vertices[cnode].flow > 0 {
+                    let new_mask = mask | (1 << node_to_mask_position[cnode]);
+                    if new_mask != mask {
+                        let new_time = ct + 1;
+                        let time_left = (time - new_time) as i32;
+                        let new_flow = dp[ct][cnode][mask] + vertices[cnode].flow * time_left;
+                        if new_flow > dp[new_time][cnode][new_mask] {
+                            dp[new_time][cnode][new_mask] = new_flow;
+                        }
                     }
                 }
 
-                for next_node in 0..node_count {
-                    // move to the node
-                    let d = shortest_paths[&(cnode, next_node)] as usize;
-                    let new_time = ct + d;
+                for next_node in &vertices[cnode].edges_to {
+                    let new_time = ct + 1;
                     let new_mask = mask;
-                    if new_time < time && dp[ct][cnode][mask] > dp[new_time][next_node][new_mask] {
-                        dp[new_time][next_node][new_mask] = dp[ct][cnode][mask];
+                    if dp[ct][cnode][mask] > dp[new_time][*next_node][new_mask] {
+                        dp[new_time][*next_node][new_mask] = dp[ct][cnode][mask];
                     }
+                }
+
+                // just stay here
+                let new_time = ct + 1;
+                let new_mask = mask;
+                if dp[ct][cnode][mask] > dp[new_time][cnode][new_mask] {
+                    dp[new_time][cnode][new_mask] = dp[ct][cnode][mask];
                 }
             }
         }
