@@ -13,20 +13,60 @@ type ValueType = i64;
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 enum MonkeyRequest {
     Value(ValueType),
-    Operation(Operation, String, String)
+    Op(Operation, String, String)
 }
 
-fn apply(request: &MonkeyRequest, values: HashMap<String, ValueType>) -> Option<ValueType> {
+impl MonkeyRequest {
+    fn derive(&self, name: &String) -> Vec<(String, MonkeyRequest)> {
+        use MonkeyRequest::*;
+        use Operation::*;
+        match self {
+            Value(_) => vec![],
+            Op(Add, left, right) => {
+                vec![
+                    (right.clone(), Op(Subtract, name.clone(), left.clone())),
+                    (left.clone(), Op(Subtract, name.clone(), right.clone())),
+                ]
+            },
+            Op(Subtract, left, right) => {
+                vec![
+                    (left.clone(), Op(Add, name.clone(), right.clone())),
+                    (right.clone(), Op(Subtract, left.clone(), name.clone())),
+                ]
+            },
+            Op(Multiply, left, right) => {
+                vec![
+                    (left.clone(), Op(Divide, name.clone(), right.clone())),
+                    (right.clone(), Op(Divide, name.clone(), left.clone())),
+                ]
+            },
+            Op(Divide, left, right) => {
+                vec![
+                    (left.clone(), Op(Multiply, name.clone(), right.clone())),
+                    (right.clone(), Op(Divide, left.clone(), name.clone())),
+                ]
+            },
+        }
+    }
+}
+
+fn apply(request: &MonkeyRequest, values: &HashMap<String, ValueType>) -> Option<ValueType> {
     match request {
         MonkeyRequest::Value(value) => Some(*value),
-        MonkeyRequest::Operation(op, left, right) => {
+        MonkeyRequest::Op(op, left, right) => {
             let left = values.get(left)?;
             let right = values.get(right)?;
             let result = match op {
                 Operation::Add => left + right,
                 Operation::Subtract => left - right,
                 Operation::Multiply => left * right,
-                Operation::Divide => left / right,
+                Operation::Divide => {
+                    if left%right == 0 {
+                        left/right
+                    } else {
+                        return None;
+                    }
+                }
             };
             Some(result)
         }
@@ -50,7 +90,7 @@ fn parse_monkey_line(s: &str) -> (String, MonkeyRequest) {
         };
         let left = parts[1].to_string();
         let right = parts[3].to_string();
-        (name, MonkeyRequest::Operation(op, left, right))
+        (name, MonkeyRequest::Op(op, left, right))
     }
 }
 
@@ -77,11 +117,62 @@ fn main() {
             if values.contains_key(name) {
                 continue;
             }
-            if let Some(value) = apply(request, values.clone()) {
+            if let Some(value) = apply(request, &values) {
                 values.insert(name.clone(), value);
             }
         }
     }
 
-    println!("Result: {:?}", values.get("root").unwrap());
+    let p1_answer = *values.get("root").unwrap();
+
+    println!("Part 1: {}", p1_answer);
+
+    values.clear();
+    values.insert("root".into(), 0);
+
+    let input = {
+        let mut transformed: Vec<(String, MonkeyRequest)> =
+            input.iter()
+            .filter(|(name, _)| name != "humn")
+            .map(|(a,b)| (a.clone(), b.clone()))
+            .collect();
+
+        let root_pos = transformed.iter().position(|(name, _)| name == "root").unwrap();
+        let root = transformed.remove(root_pos);
+
+        let new_request = match root.1 {
+            MonkeyRequest::Value(_) => panic!("Root is a value"),
+            MonkeyRequest::Op(op, left, right) => {
+                MonkeyRequest::Op(Operation::Subtract, left, right)
+            }
+        };
+
+        transformed.push(("root".into(), new_request));
+
+        let mut derived = vec![];
+
+        for (name, request) in &transformed {
+            derived.extend(request.derive(name));
+        }
+
+        transformed.extend(derived);
+
+        transformed
+    };
+
+    while !values.contains_key("humn".into()) {
+        for (name, request) in &input {
+            if values.contains_key(name) {
+                continue;
+            }
+            if let Some(value) = apply(request, &values) {
+                values.insert(name.clone(), value);
+            }
+        }
+    }
+
+    let p2_answer = *values.get("humn").unwrap();
+
+    println!("Part 1: {}", p1_answer);
+    println!("Part 2: {}", p2_answer);
 }
