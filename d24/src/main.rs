@@ -101,6 +101,30 @@ impl Field {
 
         !self.contains(state.row, state.col)
     }
+
+    fn start_row() -> i32 {
+        -1
+    }
+
+    fn start_col() -> i32 {
+        0
+    }
+
+    fn end_row(&self) -> i32 {
+        self.rows
+    }
+
+    fn end_col(&self) -> i32 {
+        self.cols - 1
+    }
+
+    fn is_start(&self, state: &State) -> bool {
+        state.row == Field::start_row() && state.col == Field::start_col()
+    }
+
+    fn is_end(&self, state: &State) -> bool {
+        state.row == self.end_row() && state.col == self.end_col()
+    }
 }
 
 impl fmt::Display for Field {
@@ -217,6 +241,7 @@ struct State {
     row: i32,
     col: i32,
     offset: i32,
+    phase: i32,
 }
 
 impl State {
@@ -228,11 +253,20 @@ impl State {
             Direction::Right => (self.row, self.col + 1),
         };
 
-        let next_state = State {
+        let mut next_state = State {
             row,
             col,
             offset: (self.offset + 1) % field.modulo,
+            phase: self.phase,
         };
+
+        if self.phase == 0 && field.is_end(&next_state) {
+            next_state.phase = 1;
+        }
+
+        if self.phase == 1 && field.is_start(&next_state) {
+            next_state.phase = 2;
+        }
 
         if field.is_valid_position(&next_state) {
             Some(next_state)
@@ -259,6 +293,7 @@ impl State {
         let stay_state = State {
             row: self.row,
             col: self.col,
+            phase: self.phase,
             offset: (self.offset + 1) % next_field.modulo,
         };
 
@@ -294,6 +329,7 @@ fn main() {
         row: -1,
         col: 0,
         offset: 0,
+        phase: 0,
     };
 
     let mut results: HashMap<State, i32> = HashMap::from([(initial_state, 0)]);
@@ -318,17 +354,32 @@ fn main() {
         }
     }
 
-    let answer = (0..modulo)
+    let p1_answer = (0..modulo)
         .into_iter()
         .map(|offset| State {
             row: initial_field.rows,
             col: initial_field.cols - 1,
+            phase: 1,
             offset,
         })
         .map(|state| results[&state])
         .min()
         .unwrap();
 
-    println!("P1: {}", answer);
+    println!("P1: {}", p1_answer);
+
+    let p2_answer = (0..modulo)
+        .into_iter()
+        .map(|offset| State {
+            row: initial_field.rows,
+            col: initial_field.cols - 1,
+            phase: 2,
+            offset,
+        })
+        .map(|state| results[&state])
+        .min()
+        .unwrap();
+
+    println!("P2: {}", p2_answer);
 
 }
